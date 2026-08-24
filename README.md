@@ -21,6 +21,8 @@ API:
 uvicorn backend.main:app --reload
 ```
 
+For Vercel, deploy the FastAPI backend with `vercel.json`; the API root will be available at your Vercel URL and the interactive docs at `/docs`. Streamlit should be deployed separately on Streamlit Community Cloud or Render.
+
 Database connectivity can be checked at `http://localhost:8000/health/database`.
 
 The DL backend defaults to a NumPy neural network so the app runs cleanly on Windows machines where TensorFlow native DLLs are unavailable. Set `DL_BACKEND=tensorflow` in `.env` only after TensorFlow imports successfully.
