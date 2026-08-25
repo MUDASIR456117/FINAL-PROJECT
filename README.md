@@ -34,7 +34,7 @@ When deploying the Streamlit app, set the main file to `frontend/streamlit_app.p
 
 Database connectivity can be checked at `http://localhost:8000/health/database`.
 
-The DL backend defaults to a NumPy neural network so the app runs cleanly on Windows machines where TensorFlow native DLLs are unavailable. Set `DL_BACKEND=tensorflow` in `.env` only after TensorFlow imports successfully.
+The DL backend defaults to a NumPy neural network. TensorFlow is intentionally excluded from the Vercel requirements because its package exceeds Vercel's serverless function size limit. Install TensorFlow separately only for local use, then set `DL_BACKEND=tensorflow` after it imports successfully.
 
 Tests:
 
