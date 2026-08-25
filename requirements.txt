@@ -5,7 +5,9 @@ pandas>=2.2
 numpy>=1.26
 plotly>=5.24
 scikit-learn>=1.5
-tensorflow>=2.16
+# TensorFlow does not currently publish a wheel for Python 3.14. The app
+# defaults to the NumPy backend when TensorFlow is unavailable.
+tensorflow>=2.16; python_version < "3.14"
 pymongo>=4.8
 python-dotenv>=1.0
 passlib[bcrypt]>=1.7
