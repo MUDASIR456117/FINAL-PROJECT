@@ -9,7 +9,7 @@ A clean, local-first personal finance dashboard based on the supplied project pl
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+	pip install -r requirements.txt
 Copy-Item .env.example .env
 # Add your MongoDB Atlas URI to .env
 streamlit run frontend\streamlit_app.py
@@ -30,7 +30,7 @@ This repository contains two different apps:
 - Deploy the `frontend/streamlit_app.py` file to Streamlit Community Cloud or Render. Netlify cannot run a Streamlit server, so deploying this repository as a Netlify site results in a page-not-found response.
 - Deploy the FastAPI API to Vercel using `vercel.json`, or to a Python server host with `uvicorn backend.main:app`.
 
-When deploying the Streamlit app, set the main file to `frontend/streamlit_app.py` and configure the same environment variables from `.env.example`.
+When deploying the Streamlit app, set the main file to `frontend/streamlit_app.py` and use `frontend/requirements.txt` for its dependencies. The root `requirements.txt` is intentionally API-only so Vercel stays below its 500 MB serverless function limit.
 
 Database connectivity can be checked at `http://localhost:8000/health/database`.
 
