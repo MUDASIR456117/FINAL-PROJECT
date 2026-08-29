@@ -144,6 +144,40 @@ with st.sidebar:
 st.markdown('<div class="eyebrow">AI Financial Advisor / 2026</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="hero"><h1>{page}</h1><p>A calm, data-led view of your money. Make the next decision with a little more signal.</p></div>', unsafe_allow_html=True)
 
+
+def advisor_reply(prompt: str, current_summary: dict) -> str:
+    prompt_text = (prompt or "").lower()
+    top_category = current_summary["category_spend"].idxmax() if not current_summary["category_spend"].empty else "your spending"
+    top_amount = float(current_summary["category_spend"].max()) if not current_summary["category_spend"].empty else 0.0
+
+    if any(word in prompt_text for word in ["save", "saving", "budget", "monthly"]):
+        return (
+            f"Your current savings rate is {current_summary['savings_rate']:.1f}%. "
+            f"To improve it, aim to keep at least 10% of income aside and cut non-essential spend from {top_category}. "
+            f"If you reduce just ${min(top_amount, 150):,.0f} from that category, your monthly cushion will improve noticeably."
+        )
+    if any(word in prompt_text for word in ["expense", "spend", "cost", "shopping"]):
+        return (
+            f"Your biggest expense is {top_category} at ${top_amount:,.0f}. "
+            f"That is about {top_amount / max(current_summary['income'], 1) * 100:.1f}% of your monthly income. "
+            "Try setting a cap for this category and shift the difference into savings."
+        )
+    if any(word in prompt_text for word in ["income", "salary", "earn"]):
+        return (
+            f"Your monthly income is ${current_summary['income']:,.0f}. "
+            f"You are currently saving ${current_summary['savings']:,.0f} after expenses. "
+            "A steady income stream is healthy; the next step is to automate savings as soon as money lands."
+        )
+    if any(word in prompt_text for word in ["risk", "score", "health"]):
+        return (
+            f"Your financial health score is {current_summary['score']}/100 and risk is {current_summary['risk']}. "
+            f"With a savings rate of {current_summary['savings_rate']:.1f}% and expense ratio of {current_summary['expense_ratio']:.1f}%, your position is stable enough for gradual growth."
+        )
+    return (
+        f"Based on your latest numbers, your income is ${current_summary['income']:,.0f}, expenses are ${current_summary['expenses']:,.0f}, and savings are ${current_summary['savings']:,.0f}. "
+        f"Your key focus should be {top_category}, since it is your largest spend category right now."
+    )
+
 if page == "Dashboard":
     st.subheader("Your month at a glance")
     cols = st.columns(4)
@@ -223,6 +257,28 @@ elif page == "Financial Analysis":
     b.metric("Expense ratio", f"{summary['expense_ratio']:.1f}%")
     c.metric("Risk classification", summary["risk"])
 elif page == "AI Advisor":
+    st.subheader("Ask your advisor")
+    if "advisor_messages" not in st.session_state:
+        st.session_state.advisor_messages = [
+            {"role": "assistant", "content": "Hi! I can help you review your finances, savings goals, or spending trends. Ask me anything about your budget."}
+        ]
+
+    for message in st.session_state.advisor_messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    user_prompt = st.chat_input("Ask about your savings, spending, or risk")
+    if user_prompt:
+        st.session_state.advisor_messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.write(user_prompt)
+
+        response = advisor_reply(user_prompt, summary)
+        st.session_state.advisor_messages.append({"role": "assistant", "content": response})
+        with st.chat_message("assistant"):
+            st.write(response)
+
+    st.markdown("---")
     st.subheader("Recommendations for this period")
     for index, tip in enumerate(recommendations(summary), 1):
         st.info(f"{index:02d}  {tip}")
