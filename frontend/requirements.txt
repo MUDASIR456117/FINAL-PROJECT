@@ -9,3 +9,5 @@ pymongo>=4.8
 python-dotenv>=1.0
 passlib[bcrypt]>=1.7
 python-multipart>=0.0.9
+requests>=2.32
+extra-streamlit-components>=0.1.81

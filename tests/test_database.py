@@ -1,4 +1,4 @@
-from database.mongodb import get_client, get_database, load_transactions, _verify_password, _hash_password
+from database.mongodb import get_client, get_database, load_transactions, delete_transaction, _verify_password, _hash_password
 from backend.main import Transaction, add_transaction
 
 
@@ -36,3 +36,23 @@ def test_api_transaction_is_saved_to_database(monkeypatch):
     assert response["message"] == "Transaction saved"
     assert saved["category"] == "Food"
     assert saved["amount"] == 25
+
+
+def test_delete_transaction_removes_matching_record(monkeypatch):
+    deleted = {}
+
+    class FakeCollection:
+        def delete_one(self, filter_query):
+            deleted.update(filter_query)
+            return type("Result", (), {"deleted_count": 1})()
+
+    class FakeDatabase:
+        transactions = FakeCollection()
+
+    monkeypatch.setattr("database.mongodb.get_database", lambda: FakeDatabase())
+
+    delete_transaction({"date": "2026-08-24", "type": "expense", "category": "Food", "amount": 25, "description": "Lunch"}, "user-123")
+
+    assert deleted["user_id"] == "user-123"
+    assert deleted["category"] == "Food"
+    assert deleted["amount"] == 25

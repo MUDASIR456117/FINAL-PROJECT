@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from database.mongodb import check_connection, load_transactions, save_transaction
+from database.mongodb import check_connection, delete_transaction, load_transactions, save_transaction
 from services.finance import analyze, goal_plan, recommendations, sample_transactions
 
 app = FastAPI(title="AI Financial Advisor API", version="1.0.0")
@@ -50,10 +50,19 @@ def add_transaction(transaction: Transaction) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="Transaction could not be saved to MongoDB") from error
     return {"message": "Transaction saved", "transaction": transaction_data}
 
+@app.delete("/transactions")
+def remove_transaction(transaction: Transaction) -> dict[str, Any]:
+    transaction_data = transaction.model_dump()
+    try:
+        delete_transaction(transaction_data)
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="Transaction could not be deleted from MongoDB") from error
+    return {"message": "Transaction deleted", "transaction": transaction_data}
+
 @app.get("/analysis")
 def get_analysis() -> dict[str, Any]:
     result = analyze(sample_transactions())
-    result.pop("category_spend")
+    result["category_spend"] = result["category_spend"].to_dict()
     return result
 
 @app.get("/advisor")

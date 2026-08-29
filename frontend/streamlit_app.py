@@ -1,18 +1,31 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import sys
 from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import requests
 import streamlit as st
+import extra_streamlit_components as stx
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from services.finance import analyze, goal_plan, notifications, recommendations, sample_transactions
 from ml.risk_model import predict_risk
 from dl.behavior_model import predict_savings
-from database.mongodb import authenticate_user, load_notifications, load_transactions, register_user, save_notifications, save_transaction
+from database.mongodb import authenticate_session, authenticate_user, create_session, delete_transaction, load_notifications, load_transactions, register_user, revoke_session, save_notifications, save_transaction
 
 st.set_page_config(page_title="AI Financial Advisor", page_icon="$", layout="wide", initial_sidebar_state="expanded")
+
+BACKEND_URL = st.secrets.get("BACKEND_URL", "https://ai-financial-advisor-7i4h.vercel.app").rstrip("/")
+
+def load_backend_analysis() -> dict | None:
+    try:
+        response = requests.get(f"{BACKEND_URL}/analysis", timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return None
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -33,9 +46,18 @@ div[data-testid="stMetric"] { background:#fff; border:1px solid var(--line); bor
 </style>
 """, unsafe_allow_html=True)
 
-from database.mongodb import authenticate_user, load_transactions, register_user, save_transaction
+cookie_manager = stx.CookieManager()
+
 if "authenticated_user" not in st.session_state:
     st.session_state.authenticated_user = None
+if "auth_token" not in st.session_state:
+    st.session_state.auth_token = cookie_manager.get("auth_token")
+if not st.session_state.authenticated_user and st.session_state.auth_token:
+    try:
+        st.session_state.authenticated_user = authenticate_session(st.session_state.auth_token)
+    except Exception:
+        st.session_state.authenticated_user = None
+        st.session_state.auth_token = None
 
 if not st.session_state.authenticated_user:
     st.markdown('<div class="eyebrow">AI Financial Advisor / secure access</div>', unsafe_allow_html=True)
@@ -50,6 +72,12 @@ if not st.session_state.authenticated_user:
             try:
                 user = authenticate_user(email, password)
                 if user:
+                    st.session_state.auth_token = create_session(user["id"])
+                    cookie_manager.set(
+                        "auth_token",
+                        st.session_state.auth_token,
+                        expires_at=datetime.now() + timedelta(days=30),
+                    )
                     st.session_state.authenticated_user = user
                     st.rerun()
                 else:
@@ -87,7 +115,9 @@ if "transactions" not in st.session_state:
         st.session_state.database_connected = False
 
 transactions = st.session_state.transactions
-summary = analyze(transactions)
+summary = load_backend_analysis() or analyze(transactions)
+if isinstance(summary.get("category_spend"), dict):
+    summary["category_spend"] = pd.Series(summary["category_spend"], dtype="float64")
 
 with st.sidebar:
     st.markdown("## $  Advisor")
@@ -101,6 +131,8 @@ with st.sidebar:
             st.markdown(f"**{alert['title']}**")
             st.caption(alert["message"])
     if st.button("Sign out"):
+        revoke_session(st.session_state.auth_token)
+        cookie_manager.delete("auth_token")
         st.session_state.clear()
         st.rerun()
 
@@ -147,7 +179,34 @@ elif page == "Financial Analysis":
                     st.warning("MongoDB unavailable. Transaction kept only for this session.")
                 st.session_state.transactions = pd.concat([transactions, pd.DataFrame([new_transaction])], ignore_index=True)
                 st.rerun()
-    st.dataframe(transactions, use_container_width=True, hide_index=True)
+    if transactions.empty:
+        st.info("No transactions yet. Add one above to start tracking your money.")
+    else:
+        st.markdown("#### Recent transactions")
+        transaction_rows = transactions.reset_index(drop=True)
+        for idx, row in transaction_rows.iterrows():
+            col_type, col_category, col_date, col_amount, col_delete = st.columns([1.2, 1.8, 1.4, 1.3, 0.8])
+            with col_type:
+                st.caption(row["type"].title())
+            with col_category:
+                st.write(row["category"])
+            with col_date:
+                st.caption(row["date"])
+            with col_amount:
+                st.markdown(f"**${float(row['amount']):,.2f}**")
+            with col_delete:
+                if st.button("Delete", key=f"delete_transaction_{idx}", help=f"Remove {row['category']} transaction"):
+                    transaction_to_delete = row.to_dict()
+                    try:
+                        delete_transaction(transaction_to_delete, user_id)
+                        st.session_state.database_connected = True
+                        st.session_state.transactions = transactions.drop(index=row.name).reset_index(drop=True)
+                        st.success("Transaction deleted.")
+                    except Exception:
+                        st.session_state.database_connected = False
+                        st.session_state.transactions = transactions.drop(index=row.name).reset_index(drop=True)
+                        st.warning("MongoDB unavailable. Removed from this session.")
+                    st.rerun()
     a, b, c = st.columns(3)
     a.metric("Savings rate", f"{summary['savings_rate']:.1f}%")
     b.metric("Expense ratio", f"{summary['expense_ratio']:.1f}%")
