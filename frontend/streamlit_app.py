@@ -1,3 +1,4 @@
+import os
 from datetime import date, datetime, timedelta
 import sys
 from pathlib import Path
@@ -16,7 +17,11 @@ from database.mongodb import authenticate_session, authenticate_user, create_ses
 
 st.set_page_config(page_title="AI Financial Advisor", page_icon="$", layout="wide", initial_sidebar_state="expanded")
 
-BACKEND_URL = st.secrets.get("BACKEND_URL", "https://ai-financial-advisor-7i4h.vercel.app").rstrip("/")
+DEFAULT_BACKEND_URL = os.getenv("BACKEND_URL", "https://ai-financial-advisor-7i4h.vercel.app")
+try:
+    BACKEND_URL = st.secrets.get("BACKEND_URL", DEFAULT_BACKEND_URL).rstrip("/")
+except Exception:
+    BACKEND_URL = DEFAULT_BACKEND_URL.rstrip("/")
 
 def load_backend_analysis() -> dict | None:
     try:
@@ -115,7 +120,7 @@ if "transactions" not in st.session_state:
         st.session_state.database_connected = False
 
 transactions = st.session_state.transactions
-summary = load_backend_analysis() or analyze(transactions)
+summary = analyze(transactions)
 if isinstance(summary.get("category_spend"), dict):
     summary["category_spend"] = pd.Series(summary["category_spend"], dtype="float64")
 
@@ -148,10 +153,16 @@ if page == "Dashboard":
     with left:
         st.markdown('<div class="section-label"><b>Income vs expenses</b></div>', unsafe_allow_html=True)
         trend = pd.DataFrame({"Month":["Income", "Expenses", "Saved"], "Amount":[summary["income"], summary["expenses"], summary["savings"]]})
-        st.plotly_chart(px.bar(trend, x="Month", y="Amount", color="Month", color_discrete_sequence=["#147d62", "#ef755f", "#8eb8a6"], template="simple_white"), use_container_width=True, config={"displayModeBar":False})
+        if transactions.empty:
+            st.info("No transactions yet. Add a few entries to see your chart.")
+        else:
+            st.plotly_chart(px.bar(trend, x="Month", y="Amount", color="Month", color_discrete_sequence=["#147d62", "#ef755f", "#8eb8a6"], template="simple_white"), use_container_width=True, config={"displayModeBar":False})
     with right:
         st.markdown('<div class="section-label"><b>Spending mix</b></div>', unsafe_allow_html=True)
-        st.plotly_chart(px.pie(values=summary["category_spend"].values, names=summary["category_spend"].index, hole=.58, color_discrete_sequence=["#147d62","#ef755f","#e8aa62","#7397a8","#9bc6b3"], template="simple_white"), use_container_width=True, config={"displayModeBar":False})
+        if summary["category_spend"].empty:
+            st.info("No spending categories yet.")
+        else:
+            st.plotly_chart(px.pie(values=summary["category_spend"].values, names=summary["category_spend"].index, hole=.58, color_discrete_sequence=["#147d62","#ef755f","#e8aa62","#7397a8","#9bc6b3"], template="simple_white"), use_container_width=True, config={"displayModeBar":False})
 elif page == "Financial Analysis":
     st.subheader("Patterns worth noticing")
     with st.expander("Add transaction"):
