@@ -31,7 +31,7 @@ def predict_savings(savings_rate: float, expense_ratio: float, months: int) -> d
     """
     if os.getenv("DL_BACKEND", "numpy").lower() != "tensorflow":
         return _numpy_neural_network(savings_rate, expense_ratio, months)
-
+ 
     try:
         import tensorflow as tf
     except (ImportError, OSError, RuntimeError):
